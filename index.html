@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Comparativo — Planejamento & Controle Orçamentário</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0B1420;
+  --panel:#111E2E;
+  --panel-2:#16273B;
+  --line:#233348;
+  --ink:#E7EEF7;
+  --ink-dim:#8FA3BC;
+  --accent:#2FD4C4;
+  --accent-dim:#1C8F86;
+  --pos:#3CCB7F;
+  --neg:#F0596A;
+  --warn:#F2B84B;
+  --gold:#F2C14E;
+  --silver:#B9C4D0;
+  --bronze:#C68A4E;
+  --mono:'IBM Plex Mono', 'Roboto Mono', monospace;
+  --sans:'Inter', -apple-system, sans-serif;
+  --disp:'Space Grotesk', 'Inter', sans-serif;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:
+    radial-gradient(1100px 500px at 85% -10%, rgba(47,212,196,.08), transparent 60%),
+    var(--bg);
+  color:var(--ink); font-family:var(--sans); line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+.wrap{max-width:1280px; margin:0 auto; padding:28px 22px 80px;}
+
+/* ---- Header ---- */
+header{display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:20px; margin-bottom:22px;}
+.eyebrow{font-family:var(--mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin-bottom:8px;}
+h1{font-family:var(--disp); font-size:clamp(22px,3vw,32px); margin:0 0 6px; font-weight:700; letter-spacing:-.01em;}
+.sub{color:var(--ink-dim); font-size:14px; max-width:640px;}
+.hdr-meta{text-align:right; font-family:var(--mono); font-size:12px; color:var(--ink-dim);}
+.hdr-meta b{color:var(--ink); font-weight:600;}
+
+/* ---- KPI row ---- */
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:26px;}
+.kpi{background:linear-gradient(180deg,var(--panel),var(--panel-2)); border:1px solid var(--line); border-radius:10px; padding:16px 18px; position:relative; overflow:hidden;}
+.kpi::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent);}
+.kpi.lead::before{background:var(--gold);}
+.kpi .label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-dim); margin-bottom:6px;}
+.kpi .value{font-family:var(--mono); font-size:22px; font-weight:600; color:var(--ink);}
+.kpi .value.pos{color:var(--pos);} .kpi .value.neg{color:var(--neg);}
+.kpi .foot{font-size:11.5px; color:var(--ink-dim); margin-top:4px;}
+
+/* ---- Filter bar ---- */
+.filterbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin-bottom:20px;}
+.filterbar .grp{display:flex; align-items:center; gap:8px;}
+.filterbar label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim);}
+select, .seg-toggle button{
+  background:var(--panel-2); color:var(--ink); border:1px solid var(--line); border-radius:6px;
+  padding:7px 10px; font-family:var(--sans); font-size:13px; cursor:pointer;
+}
+select:focus, .seg-toggle button:focus{outline:2px solid var(--accent); outline-offset:1px;}
+.seg-toggle{display:flex; gap:4px; background:var(--panel-2); padding:3px; border-radius:8px; border:1px solid var(--line);}
+.seg-toggle button{border:none; background:transparent; border-radius:5px; padding:6px 12px;}
+.seg-toggle button.active{background:var(--accent); color:#04201C; font-weight:600;}
+.spacer{flex:1;}
+.filterbar .note{font-size:11.5px; color:var(--ink-dim); font-style:italic;}
+
+/* ---- Panels / grid ---- */
+.grid2{display:grid; grid-template-columns:1.3fr 1fr; gap:16px; margin-bottom:16px;}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px;}
+.panel h2{font-family:var(--disp); font-size:15px; margin:0 0 4px; font-weight:600;}
+.panel .desc{font-size:12px; color:var(--ink-dim); margin-bottom:14px;}
+canvas{max-width:100%;}
+.chart-box{position:relative; width:100%; height:260px;}
+@media (max-width:600px){ .chart-box{height:220px;} }
+
+/* ---- Ranking table ---- */
+table{width:100%; border-collapse:collapse; font-size:13px;}
+th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim); padding:8px 10px; border-bottom:1px solid var(--line); cursor:pointer; user-select:none;}
+th:hover{color:var(--accent);}
+td{padding:9px 10px; border-bottom:1px solid rgba(255,255,255,.04); font-family:var(--mono); font-size:12.5px;}
+td.name{font-family:var(--sans); font-weight:600;}
+tr.row-clickable{cursor:pointer; transition:background .15s;}
+tr.row-clickable:hover{background:rgba(47,212,196,.06);}
+.medal{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; font-size:11px; font-weight:700; font-family:var(--sans); color:#0B1420;}
+.medal.m1{background:var(--gold);} .medal.m2{background:var(--silver);} .medal.m3{background:var(--bronze);}
+.medal.mx{background:var(--panel-2); color:var(--ink-dim); border:1px solid var(--line);}
+.pos{color:var(--pos);} .neg{color:var(--neg);}
+.pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-family:var(--mono);}
+.pill.pos-bg{background:rgba(60,203,127,.14); color:var(--pos);}
+.pill.neg-bg{background:rgba(240,89,106,.14); color:var(--neg);}
+
+/* ---- Detail drilldown ---- */
+#detailPanel{display:none;}
+#detailPanel.show{display:block;}
+.detail-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+.detail-head .tag{font-family:var(--mono); font-size:11px; color:var(--ink-dim);}
+.closeBtn{background:none; border:1px solid var(--line); color:var(--ink-dim); border-radius:6px; padding:5px 10px; cursor:pointer; font-size:12px;}
+.closeBtn:hover{color:var(--ink); border-color:var(--accent);}
+.dtable-wrap{max-height:360px; overflow-y:auto; border:1px solid var(--line); border-radius:8px;}
+.dtable-wrap table{font-size:12px;}
+.dtable-wrap th{position:sticky; top:0; background:var(--panel);}
+.flag{font-size:13px;}
+
+/* ---- Insight / didactic ---- */
+.insight-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-top:6px;}
+.insight{background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:14px 16px;}
+.insight h3{font-size:12.5px; margin:0 0 6px; color:var(--accent); font-family:var(--mono); text-transform:uppercase; letter-spacing:.05em;}
+.insight p{font-size:13px; color:var(--ink-dim); margin:0;}
+.qlist{margin:0; padding-left:18px; font-size:13px; color:var(--ink-dim);}
+.qlist li{margin-bottom:6px;}
+.rule-box{margin-top:18px; border:1px dashed var(--accent-dim); border-radius:10px; padding:14px 18px; font-size:13px; color:var(--ink);}
+.rule-box b{color:var(--accent);}
+
+footer{margin-top:30px; font-size:11.5px; color:var(--ink-dim); text-align:center; border-top:1px solid var(--line); padding-top:16px;}
+
+@media (max-width:860px){
+  .grid2{grid-template-columns:1fr;}
+  header{flex-direction:column; align-items:flex-start;}
+  .hdr-meta{text-align:left;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">Planejamento &amp; Controle Orçamentário · MBA Controladoria e Finanças</div>
+      <h1>Painel Comparativo — Empresas A a F</h1>
+      <div class="sub">Confronto Orçado × Realizado de seis empresas fictícias de consultoria (Teresina/PI), competência Janeiro–Fevereiro/2026, para apoiar a discussão em grupo do Exercício 01.</div>
+    </div>
+    <div class="hdr-meta">
+      Período: <b>Jan/2026 – Fev/2026</b><br>
+      Base: <b>6 empresas · 2 meses</b>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpiRow"></div>
+
+  <div class="filterbar">
+    <div class="grp">
+      <label>Empresa</label>
+      <select id="fEmpresa">
+        <option value="ALL">Todas</option>
+      </select>
+    </div>
+    <div class="grp">
+      <label>Mês</label>
+      <div class="seg-toggle" id="fMes">
+        <button data-v="jan" class="active">Janeiro</button>
+        <button data-v="fev">Fevereiro</button>
+      </div>
+    </div>
+    <div class="grp">
+      <label>Base</label>
+      <div class="seg-toggle" id="fBase">
+        <button data-v="real" class="active">Realizado</button>
+        <button data-v="plan">Planejado</button>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="note">Clique em uma empresa na tabela de ranking para abrir o detalhamento linha a linha.</div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Receita × Despesa por empresa</h2>
+      <div class="desc">Barras agrupadas conforme o mês e a base (orçado/realizado) selecionados no filtro acima.</div>
+      <div class="chart-box"><canvas id="chartRD"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Resultado do período (R$)</h2>
+      <div class="desc">Receita − Despesa. Verde = superávit; vermelho = déficit no mês/base filtrados.</div>
+      <div class="chart-box"><canvas id="chartResultado"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid2" style="grid-template-columns:1fr 1fr;">
+    <div class="panel">
+      <h2>Índice de eficiência — Despesa / Receita</h2>
+      <div class="desc">Quanto menor a barra, mais eficiente a estrutura de custos frente à receita gerada (Fev/Realizado).</div>
+      <div class="chart-box"><canvas id="chartEficiencia"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Aderência ao orçamento — desvio de despesa (%)</h2>
+      <div class="desc">Distância entre o realizado e o planejado em despesas totais. Barras próximas de 0% indicam maior disciplina orçamentária.</div>
+      <div class="chart-box"><canvas id="chartDesvio"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <h2>Ranking comparativo — Fev/2026 (Realizado)</h2>
+    <div class="desc">Clique nos cabeçalhos para ordenar. Clique na linha para ver o detalhamento de despesas da empresa.</div>
+    <table id="rankTable">
+      <thead>
+        <tr>
+          <th data-k="pos">#</th>
+          <th data-k="nome">Empresa</th>
+          <th data-k="segmento">Segmento</th>
+          <th data-k="receita">Receita Fev</th>
+          <th data-k="despesa">Despesa Fev</th>
+          <th data-k="resultado">Resultado Fev</th>
+          <th data-k="margem">Margem %</th>
+          <th data-k="desvioDesp">Desvio Desp. %</th>
+        </tr>
+      </thead>
+      <tbody id="rankBody"></tbody>
+    </table>
+  </div>
+
+  <div class="panel" id="detailPanel">
+    <div class="detail-head">
+      <div>
+        <h2 id="detailTitle" style="margin-bottom:2px;">Detalhamento</h2>
+        <div class="tag" id="detailTag"></div>
+      </div>
+      <button class="closeBtn" id="closeDetail">Fechar ✕</button>
+    </div>
+    <div class="dtable-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Descrição</th>
+            <th>Jan Plan.</th>
+            <th>Jan Real.</th>
+            <th>Fev Plan.</th>
+            <th>Fev Real.</th>
+            <th>Δ Fev %</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Leitura didática para os grupos</h2>
+    <div class="desc">Use estas perguntas — as mesmas do exercício — como roteiro de discussão, agora com o comparativo entre as seis empresas à vista.</div>
+    <div class="insight-grid">
+      <div class="insight"><h3>01 · Trajetória geral</h3><p>Olhando o painel como um todo, quais empresas parecem estar indo bem e quais parecem estar indo mal? O que sustenta essa leitura — receita, despesa ou ambas?</p></div>
+      <div class="insight"><h3>02 · Orçado × Realizado</h3><p>Comparando os dois meses, quais empresas caminharam na direção do planejado e quais se afastaram? O gráfico de desvio de despesa ajuda a localizar isso.</p></div>
+      <div class="insight"><h3>03 · Origem do desvio</h3><p>Para cada empresa, o problema (quando existe) está mais concentrado na receita (vendeu menos) ou nas despesas (gastou mais)?</p></div>
+      <div class="insight"><h3>04 · Estrutura de pessoal</h3><p>Somando salário, encargos, pró-labore e benefícios, esse gasto com pessoas é compatível com o faturamento de cada empresa?</p></div>
+      <div class="insight"><h3>05 · Aprendizado no tempo</h3><p>Entre janeiro e fevereiro, quais empresas corrigiram rota e quais repetiram os mesmos desvios?</p></div>
+      <div class="insight"><h3>06 · Ambiente externo</h3><p>Algum padrão de custo (energia, insumos, provisões) se repete em várias empresas a ponto de sugerir efeito do cenário econômico, e não só gestão interna?</p></div>
+    </div>
+    <div class="rule-box">
+      <b>Regra de ouro:</b> a IA sugere, o gestor decide. Este painel organiza e cruza os números — a leitura crítica, as hipóteses e a decisão final são do grupo.
+    </div>
+  </div>
+
+  <footer>
+    Painel construído a partir dos dados fictícios apresentados nos Exercícios 01 (Empresas A–F, Grupos 01–06) — Planejamento e Controle Orçamentário. Uso exclusivamente didático.
+  </footer>
+
+</div>
+
+<script>
+const DATA = {"A": {"nome": "Empresa A", "segmento": "consultoria tributária", "capitalSocial": 200000.0, "ativos": [["Aquisição de 06 computadores", 24000.0, 30000.0, 0.0, 0.0], ["Aquisição de um notebook", 5000.0, 7000.0, 0.0, 0.0], ["Aquisição de uma impressora", 1800.0, 2400.0, 0.0, 0.0], ["Aquisição de 08 cadeiras giratórias", 6400.0, 8000.0, 0.0, 0.0], ["Aquisição de 06 celulares", 4800.0, 6000.0, 0.0, 0.0], ["Aquisição de 06 gaveteiros", 2400.0, 3000.0, 0.0, 0.0], ["Estação de trabalho (6 pessoas)", 3000.0, 5000.0, 0.0, 0.0], ["Licenças Office 365 (6 usuários)", 3600.0, 4200.0, 0.0, 0.0], ["Aquisição de Licença_Sistema operacional + Custo Operacional", 15000.0, 22000.0, 0.0, 0.0]], "ativosPlan": 66000.0, "ativosReal": 87600.0, "receita": [65000.0, 60000.0, 65000.0, 65000.0], "despesas": [55414.0, 80952.61, 55214.0, 65329.11], "despesasDetalhe": [["Reforma de sala comercial para a instalação do escritório", 0.0, 15000.0, 0.0, 0.0], ["Despesa com propaganda e publicidade", 700.0, 900.0, 500.0, 900.0], ["Despesa com treinamento de pessoal", 1200.0, 1900.0, 1200.0, 800.0], ["Despesa com aluguel", 1800.0, 2000.0, 1800.0, 2000.0], ["Despesa com condomínio", 450.0, 500.0, 450.0, 500.0], ["Despesa com energia elétrica", 350.0, 450.0, 350.0, 500.0], ["Despesa com água", 200.0, 250.0, 200.0, 320.0], ["Despesa com manutenções diversas", 350.0, 400.0, 350.0, 420.0], ["Despesa Bens de Pequeno valor", 800.0, 1000.0, 800.0, 600.0], ["Despesa com manutenções de software", 200.0, 250.0, 200.0, 250.0], ["Despesa com material de escritório", 500.0, 750.0, 500.0, 550.0], ["Despesa com telefone", 300.0, 500.0, 300.0, 540.0], ["Despesa com Internet", 170.0, 200.0, 170.0, 200.0], ["Despesa com tarifas bancárias", 30.0, 50.0, 30.0, 50.0], ["Despesa com contabilidade", 850.0, 1200.0, 850.0, 1200.0], ["Despesa com consultoria jurídica", 400.0, 600.0, 400.0, 600.0], ["Despesa com Pró-Labore", 4800.0, 5200.0, 4800.0, 5200.0], ["Despesa com INSS Patronal Pró-Labore", 960.0, 1040.0, 960.0, 1040.0], ["Despesa com salário", 18000.0, 21000.0, 18000.0, 21000.0], ["Despesa com INSS Patronal + Sistema S", 4644.0, 5418.0, 4644.0, 5418.0], ["Despesa com FGTS Patronal", 1440.0, 1680.0, 1440.0, 1680.0], ["Despesa com plano de saúde", 1000.0, 1200.0, 1000.0, 1200.0], ["Despesa com seguro de vida", 220.0, 300.0, 220.0, 300.0], ["Despesa com auxílio alimentação", 2400.0, 3000.0, 2400.0, 3000.0], ["Depreciação do Imobilizado", 600.0, 641.29, 600.0, 641.29], ["Amortização do Intangível", 450.0, 498.67, 450.0, 498.67], ["Despesa com provisão 13º", 2000.0, 2240.0, 2000.0, 2240.0], ["Despesa com provisão de férias", 2600.0, 2986.66, 2600.0, 2986.66], ["Provisão tributária", 8000.0, 9798.0, 8000.0, 10694.5]]}, "B": {"nome": "Empresa B", "segmento": "consultoria de RH", "capitalSocial": 150000.0, "ativos": [["Aquisição de 04 computadores", 16000.0, 15200.0, 0.0, 0.0], ["Aquisição de um notebook", 6500.0, 5198.0, 0.0, 0.0], ["Aquisição de uma impressora", 1400.0, 2744.0, 0.0, 0.0], ["Aquisição de 08 cadeiras giratórias", 6000.0, 8792.0, 0.0, 0.0], ["Aquisição de 04 aparelho de telefone celular", 4800.0, 6400.0, 0.0, 0.0], ["Aquisição de 04 gaveteiros", 1600.0, 2580.57, 0.0, 0.0], ["Estação de trabalho (4 pessoas)", 2000.0, 3217.4, 0.0, 0.0], ["Licenças Office 365 (4 usuários)", 2400.0, 3279.96, 0.0, 0.0], ["Aquisição de Licença_Sistema operacional + Custo Operacional", 4500.0, 5000.0, 0.0, 0.0]], "ativosPlan": 45200.0, "ativosReal": 52411.93, "receita": [55000.0, 45000.0, 75000.0, 68000.0], "despesas": [64630.0, 69057.88, 64430.0, 61514.78], "despesasDetalhe": [["Reforma de sala comercial para a instalação do escritório", 0.0, 10000.0, 0.0, 0.0], ["Despesa com propaganda e publicidade", 2000.0, 1500.0, 2000.0, 2000.0], ["Despesa com treinamento de pessoal", 1800.0, 1400.0, 1600.0, 800.0], ["Despesa com aluguel", 1000.0, 1200.0, 1000.0, 1200.0], ["Despesa com condomínio", 250.0, 250.0, 250.0, 250.0], ["Despesa com energia elétrica", 330.0, 320.0, 330.0, 280.0], ["Despesa com água", 190.0, 180.0, 190.0, 165.0], ["Despesa com manutenções diversas", 450.0, 450.0, 450.0, 450.0], ["Despesa Bens de Pequeno valor", 1700.0, 1500.0, 1700.0, 450.0], ["Despesa com manutenções de software", 360.0, 360.0, 360.0, 360.0], ["Despesa com material de escritório", 800.0, 750.0, 800.0, 550.0], ["Despesa com telefone", 420.0, 450.0, 420.0, 380.0], ["Despesa com Internet", 150.0, 150.0, 150.0, 150.0], ["Despesa com tarifas bancárias", 40.0, 80.0, 40.0, 80.0], ["Despesa com contabilidade", 650.0, 800.0, 650.0, 800.0], ["Despesa com consultoria jurídica", 500.0, 500.0, 500.0, 500.0], ["Despesa com Pró-Labore", 8000.0, 8000.0, 8000.0, 8000.0], ["Despesa com INSS Patronal Pró-Labore", 1600.0, 1600.0, 1600.0, 1600.0], ["Despesa com salário", 20000.0, 18000.0, 20000.0, 18000.0], ["Despesa com INSS Patronal + Sistema S", 5160.0, 4644.0, 5160.0, 4644.0], ["Despesa com FGTS Patronal", 1600.0, 1440.0, 1600.0, 1440.0], ["Despesa com plano de saúde", 1000.0, 800.0, 1000.0, 800.0], ["Despesa com seguro de vida", 280.0, 200.0, 280.0, 200.0], ["Despesa com auxílio alimentação", 2500.0, 2000.0, 2500.0, 2000.0], ["Depreciação do Imobilizado", 700.0, 517.38, 700.0, 517.38], ["Amortização do Intangível", 250.0, 138.0, 250.0, 138.0], ["Despesa com provisão 13º", 2200.0, 1920.0, 2200.0, 1920.0], ["Despesa com provisão de férias", 2700.0, 2559.99, 2700.0, 2559.99], ["Provisão tributária", 8000.0, 7348.5, 8000.0, 11280.4]]}, "C": {"nome": "Empresa C", "segmento": "consultoria em gestão de riscos", "capitalSocial": 100000.0, "ativos": [["Aquisição de 10 computadores", 42000.0, 38000.0, 0.0, 0.0], ["Aquisição de um notebook", 4800.0, 5198.0, 0.0, 0.0], ["Aquisição de uma impressora", 1900.0, 2744.0, 0.0, 0.0], ["Aquisição de 12 cadeiras giratórias", 9600.0, 13188.0, 0.0, 0.0], ["Aquisição de 04 aparelho de telefone celular", 3600.0, 3956.0, 0.0, 0.0], ["Aquisição de 14 gaveteiro", 2100.0, 2580.57, 0.0, 0.0], ["Aquisição de Estação de trabalho ilhas para 15 pessoas", 5700.0, 6434.8, 0.0, 0.0], ["Aquisição de 12 licenças do office 365", 9600.0, 9839.88, 0.0, 0.0], ["Aquisição de Licença_Sistema operacional + Custo Operacional", 4500.0, 5000.0, 0.0, 0.0]], "ativosPlan": 83800.0, "ativosReal": 86941.25, "receita": [55000.0, 46500.0, 75000.0, 95000.0], "despesas": [101036.0, 108230.93, 104526.0, 114790.98], "despesasDetalhe": [["Despesa com propaganda e publicidade", 1500.0, 2000.0, 1500.0, 2000.0], ["Despesa com treinamento de pessoal", 2000.0, 2300.0, 2000.0, 1800.0], ["Despesa com aluguel", 800.0, 800.0, 800.0, 800.0], ["Despesa com condomínio", 350.0, 350.0, 350.0, 350.0], ["Despesa com energia elétrica", 200.0, 180.0, 200.0, 180.0], ["Despesa com água", 300.0, 250.0, 300.0, 250.0], ["Despesa com manutenções diversas", 500.0, 600.0, 500.0, 600.0], ["Despesa Bens de Pequeno valor", 600.0, 900.0, 600.0, 200.0], ["Despesa com manutenções de software", 400.0, 400.0, 400.0, 400.0], ["Despesa com material de escritório", 1200.0, 1500.0, 1200.0, 300.0], ["Despesa com telefone", 350.0, 450.0, 350.0, 450.0], ["Despesa com Internet", 150.0, 150.0, 150.0, 150.0], ["Despesa com tarifas bancárias", 60.0, 80.0, 60.0, 80.0], ["Despesa com contabilidade", 1450.0, 1500.0, 1450.0, 1500.0], ["Despesa com consultoria jurídica", 800.0, 800.0, 800.0, 800.0], ["Despesa com Pró-Labore", 10000.0, 10000.0, 10000.0, 10000.0], ["Despesa com INSS Patronal Pró-Labore", 2000.0, 2000.0, 2000.0, 2000.0], ["Despesa com salário", 38000.0, 42000.0, 38000.0, 42000.0], ["Despesa com INSS Patronal + Sistema S", 9804.0, 10836.0, 9804.0, 10836.0], ["Despesa com FGTS Patronal", 3040.0, 3360.0, 3040.0, 3360.0], ["Despesa com plano de saúde", 1800.0, 2160.0, 1800.0, 2160.0], ["Despesa com seguro de vida", 840.0, 960.0, 840.0, 960.0], ["Despesa com auxílio alimentação", 4500.0, 5400.0, 4500.0, 5400.0], ["Depreciação do Imobilizado", 1162.0, 960.83, 1162.0, 960.83], ["Amortização do Intangível", 250.0, 247.33, 250.0, 247.33], ["Despesa com provisão 13º", 4000.0, 4480.0, 4000.0, 4480.0], ["Despesa com provisão de férias", 5400.0, 5973.32, 5400.0, 5973.32], ["Provisão tributária", 9580.0, 7593.45, 13070.0, 16553.5]]}, "D": {"nome": "Empresa D", "segmento": "consultoria de diagnóstico empresarial", "capitalSocial": 145000.0, "ativos": [["Aquisição de 3 computadores", 12600.0, 14400.0, 0.0, 0.0], ["Aquisição de um notebook", 3500.0, 3850.0, 0.0, 0.0], ["Aquisição de uma impressora", 1600.0, 2350.0, 0.0, 0.0], ["Aquisição de 4 cadeiras giratórias", 3800.0, 4396.0, 0.0, 0.0], ["Aquisição de 04 aparelho de telefone celular", 4000.0, 3956.0, 0.0, 0.0], ["Aquisição de 04 gaveteiros", 3000.0, 2580.57, 0.0, 0.0], ["Aquisição de Estação de trabalho para 04 pessoas", 2600.0, 3217.4, 0.0, 0.0], ["Aquisição de 04 licenças do office 365", 3000.0, 3279.96, 0.0, 0.0], ["Aquisição de Licença_Sistema op. + Custo Operacional", 20000.0, 25000.0, 0.0, 0.0]], "ativosPlan": 54100.0, "ativosReal": 63029.93, "receita": [65000.0, 68500.0, 70000.0, 66000.0], "despesas": [52402.69, 76259.04, 52683.2, 57160.79], "despesasDetalhe": [["Reforma de sala comercial para a instalação do escritório", 0.0, 18000.0, 0.0, 0.0], ["Despesa com propaganda e publicidade", 2800.0, 3500.0, 2800.0, 3500.0], ["Despesa com treinamento de pessoal", 300.0, 500.0, 300.0, 700.0], ["Despesa com aluguel", 600.0, 750.0, 600.0, 750.0], ["Despesa com condomínio", 150.0, 200.0, 150.0, 200.0], ["Despesa com energia elétrica", 200.0, 250.0, 200.0, 300.0], ["Despesa com água", 120.0, 150.0, 120.0, 250.0], ["Despesa com manutenções diversas", 550.0, 750.0, 550.0, 640.0], ["Despesa Bens de Pequeno valor", 1000.0, 1200.0, 600.0, 400.0], ["Despesa com manutenções de software", 400.0, 450.0, 400.0, 450.0], ["Despesa com material de escritório", 550.0, 700.0, 400.0, 650.0], ["Despesa com telefone", 300.0, 350.0, 300.0, 350.0], ["Despesa com Internet", 100.0, 115.0, 100.0, 115.0], ["Despesa com tarifas bancárias", 50.0, 100.0, 50.0, 100.0], ["Despesa com contabilidade", 800.0, 900.0, 800.0, 900.0], ["Despesa com consultoria jurídica", 300.0, 500.0, 300.0, 500.0], ["Despesa com Pró-Labore", 10000.0, 10000.0, 10000.0, 10000.0], ["Despesa com INSS Patronal Pró-Labore", 2000.0, 2000.0, 2000.0, 2000.0], ["Despesa com salário", 12000.0, 13500.0, 12000.0, 13500.0], ["Despesa com INSS Patronal + Sistema S", 3096.0, 3483.0, 3096.0, 3483.0], ["Despesa com FGTS Patronal", 960.0, 1080.0, 960.0, 1080.0], ["Despesa com plano de saúde", 400.0, 540.0, 400.0, 540.0], ["Despesa com seguro de vida", 200.0, 240.0, 200.0, 240.0], ["Despesa com auxílio alimentação", 1000.0, 1350.0, 1000.0, 1350.0], ["Depreciação do Imobilizado", 350.0, 441.67, 350.0, 441.67], ["Amortização do Intangível", 400.0, 471.33, 400.0, 471.33], ["Despesa com provisão 13º", 1280.0, 1440.0, 1280.0, 1440.0], ["Despesa com provisão de férias", 1700.0, 1920.0, 1700.0, 1920.0], ["Provisão tributária", 10796.69, 11378.05, 11627.2, 10889.8]]}, "E": {"nome": "Empresa E", "segmento": "consultoria contábil", "capitalSocial": 165000.0, "ativos": [["Aquisição de 8 computadores", 37600.0, 38800.0, 0.0, 0.0], ["Aquisição de um notebook", 4800.0, 5620.0, 0.0, 0.0], ["Aquisição de uma impressora", 1800.0, 2350.0, 0.0, 0.0], ["Aquisição de 8 cadeiras giratórias", 7200.0, 8792.0, 0.0, 0.0], ["Aquisição de 08 aparelho de telefone celular", 6800.0, 7912.0, 0.0, 0.0], ["Aquisição de 08 gaveteiros", 4640.0, 5161.13, 0.0, 0.0], ["Aquisição de Estação de trabalho para 04 pessoas", 3000.0, 3217.4, 0.0, 0.0], ["Aquisição de 08 licenças do office 365", 5440.0, 6559.92, 0.0, 0.0], ["Aquisição de Licença_Sistema op. + Custo Operacional", 9000.0, 9500.0, 0.0, 0.0]], "ativosPlan": 80280.0, "ativosReal": 87912.45, "receita": [85000.0, 96500.0, 90000.0, 97800.0], "despesas": [80254.0, 112968.38, 80270.51, 88272.27], "despesasDetalhe": [["Reforma de sala comercial para a instalação do escritório", 0.0, 25000.0, 0.0, 0.0], ["Despesa com propaganda e publicidade", 5000.0, 4500.0, 5000.0, 4500.0], ["Despesa com treinamento de pessoal", 1800.0, 2000.0, 1500.0, 2500.0], ["Despesa com aluguel", 1200.0, 1300.0, 1200.0, 1300.0], ["Despesa com condomínio", 400.0, 350.0, 400.0, 350.0], ["Despesa com energia elétrica", 300.0, 250.0, 300.0, 290.0], ["Despesa com água", 250.0, 200.0, 180.0, 260.0], ["Despesa com manutenções diversas", 800.0, 950.0, 500.0, 1000.0], ["Despesa Bens de Pequeno valor", 200.0, 950.0, 150.0, 300.0], ["Despesa com manutenções de software", 400.0, 450.0, 400.0, 450.0], ["Despesa com material de escritório", 650.0, 850.0, 700.0, 750.0], ["Despesa com telefone", 450.0, 550.0, 500.0, 600.0], ["Despesa com Internet", 130.0, 120.0, 130.0, 120.0], ["Despesa com tarifas bancárias", 60.0, 50.0, 60.0, 50.0], ["Despesa com contabilidade", 1200.0, 950.0, 1200.0, 950.0], ["Despesa com consultoria jurídica", 800.0, 650.0, 500.0, 750.0], ["Despesa com Pró-Labore", 8000.0, 10000.0, 8000.0, 10000.0], ["Despesa com INSS Patronal Pró-Labore", 1600.0, 2000.0, 1600.0, 2000.0], ["Despesa com salário", 23000.0, 24000.0, 23000.0, 24000.0], ["Despesa com INSS Patronal + Sistema S", 5934.0, 6192.0, 5934.0, 6192.0], ["Despesa com FGTS Patronal", 1840.0, 1920.0, 1840.0, 1920.0], ["Despesa com plano de saúde", 1350.0, 1440.0, 1350.0, 1440.0], ["Despesa com seguro de vida", 340.0, 640.0, 340.0, 640.0], ["Despesa com auxílio alimentação", 3500.0, 3600.0, 3500.0, 3600.0], ["Depreciação do Imobilizado", 1000.0, 968.94, 1000.0, 968.94], ["Amortização do Intangível", 250.0, 267.67, 250.0, 267.67], ["Despesa com provisão 13º", 1950.0, 2560.0, 1950.0, 2560.0], ["Despesa com provisão de férias", 3050.0, 3413.32, 3050.0, 3413.32], ["Provisão tributária", 14800.0, 16846.45, 15736.51, 17100.34]]}, "F": {"nome": "Empresa F", "segmento": "consultoria de marketing", "capitalSocial": 145000.0, "ativos": [["Aquisição de 5 computadores", 26000.0, 29250.0, 0.0, 0.0], ["Aquisição de um notebook", 4850.0, 5620.0, 0.0, 0.0], ["Aquisição de uma impressora", 2200.0, 2350.0, 0.0, 0.0], ["Aquisição de 8 cadeiras giratórias", 5200.0, 5495.0, 0.0, 0.0], ["Aquisição de 05 aparelho de telefone celular", 5000.0, 4945.0, 0.0, 0.0], ["Aquisição de 05 gaveteiro", 3100.0, 3225.71, 0.0, 0.0], ["Aquisição de Estação de trabalho para 06 pessoas", 3000.0, 3217.4, 0.0, 0.0], ["Aquisição de 05 licenças do office 365", 4100.0, 4099.95, 0.0, 0.0], ["Aquisição de Licença_Sistema Op. Custo Operacional", 2000.0, 2500.0, 0.0, 0.0]], "ativosPlan": 55450.0, "ativosReal": 60703.06, "receita": [72000.0, 68000.0, 75000.0, 62000.0], "despesas": [67036.0, 77746.83, 66786.0, 66961.03], "despesasDetalhe": [["Reforma de sala comercial para a instalação do escritório", 0.0, 8000.0, 0.0, 0.0], ["Despesa com propaganda e publicidade", 1000.0, 900.0, 1000.0, 900.0], ["Despesa com treinamento de pessoal", 800.0, 700.0, 600.0, 450.0], ["Despesa com aluguel", 1500.0, 1600.0, 1500.0, 1600.0], ["Despesa com condomínio", 400.0, 450.0, 400.0, 450.0], ["Despesa com energia elétrica", 300.0, 250.0, 300.0, 350.0], ["Despesa com água", 150.0, 200.0, 150.0, 180.0], ["Despesa com manutenções diversas", 950.0, 1200.0, 950.0, 1200.0], ["Despesa Bens de Pequeno valor", 600.0, 1300.0, 0.0, 90.0], ["Despesa com manutenções de software", 400.0, 450.0, 400.0, 450.0], ["Despesa com material de escritório", 1000.0, 1450.0, 1000.0, 1200.0], ["Despesa com telefone", 500.0, 550.0, 500.0, 550.0], ["Despesa com Internet", 150.0, 160.0, 150.0, 160.0], ["Despesa com tarifas bancárias", 150.0, 150.0, 150.0, 150.0], ["Despesa com contabilidade", 1500.0, 1300.0, 1500.0, 1300.0], ["Despesa com consultoria jurídica", 450.0, 500.0, 450.0, 500.0], ["Despesa com Pró-Labore", 6000.0, 6000.0, 6000.0, 6000.0], ["Despesa com INSS Patronal Pró-Labore", 1200.0, 1200.0, 1200.0, 1200.0], ["Despesa com salário", 22000.0, 22500.0, 22000.0, 22500.0], ["Despesa com INSS Patronal + Sistema S", 5676.0, 5805.0, 5676.0, 5805.0], ["Despesa com FGTS Patronal", 1760.0, 1800.0, 1760.0, 1800.0], ["Despesa com plano de saúde", 850.0, 900.0, 850.0, 900.0], ["Despesa com seguro de vida", 350.0, 400.0, 350.0, 400.0], ["Despesa com auxílio alimentação", 2150.0, 2250.0, 2150.0, 2250.0], ["Depreciação do Imobilizado", 850.0, 741.44, 850.0, 741.44], ["Amortização do Intangível", 100.0, 110.0, 100.0, 110.0], ["Despesa com provisão 13º", 1850.0, 2400.0, 1850.0, 2400.0], ["Despesa com provisão de férias", 2450.0, 3199.99, 2450.0, 3199.99], ["Provisão tributária", 11950.0, 11280.4, 12500.0, 10124.6]]}};
+
+const ORDER = ['A','B','C','D','E','F'];
+const state = { empresa:'ALL', mes:'fev', base:'real' };
+
+function fmtBRL(v){
+  return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2});
+}
+function fmtBRLShort(v){
+  const abs = Math.abs(v);
+  let s;
+  if(abs>=1000) s = (v/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+'k';
+  else s = v.toLocaleString('pt-BR',{maximumFractionDigits:0});
+  return 'R$ '+s;
+}
+function pct(v){ return (v>=0?'+':'')+v.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%'; }
+
+// idx map: 0=Jan_Plan,1=Jan_Real,2=Fev_Plan,3=Fev_Real
+function idxFor(mes,base){
+  if(mes==='jan') return base==='plan'?0:1;
+  return base==='plan'?2:3;
+}
+
+function computeRow(letter){
+  const d = DATA[letter];
+  const iReal = 3, iPlan=2, iJanReal=1, iJanPlan=0;
+  const recFevReal = d.receita[iReal], despFevReal = d.despesas[iReal];
+  const recFevPlan = d.receita[iPlan], despFevPlan = d.despesas[iPlan];
+  const resultado = recFevReal - despFevReal;
+  const margem = recFevReal!==0 ? (resultado/recFevReal*100) : 0;
+  const desvioDesp = despFevPlan!==0 ? ((despFevReal-despFevPlan)/despFevPlan*100) : 0;
+  const desvioRec = recFevPlan!==0 ? ((recFevReal-recFevPlan)/recFevPlan*100) : 0;
+  const eficiencia = recFevReal!==0 ? (despFevReal/recFevReal*100) : 0;
+  const resultadoJan = d.receita[iJanReal]-d.despesas[iJanReal];
+  const acumulado = resultadoJan + resultado;
+  return {letter, nome:d.nome, segmento:d.segmento, receita:recFevReal, despesa:despFevReal,
+           resultado, margem, desvioDesp, desvioRec, eficiencia, acumulado};
+}
+
+const ROWS = ORDER.map(computeRow);
+// Ranking by margem desc (efficiency-weighted)
+const ranked = [...ROWS].sort((a,b)=>b.margem-a.margem);
+const leader = ranked[0];
+
+function buildKPIs(){
+  const kpiRow = document.getElementById('kpiRow');
+  const totalRecFev = ROWS.reduce((s,r)=>s+r.receita,0);
+  const totalDespFev = ROWS.reduce((s,r)=>s+r.despesa,0);
+  const totalResultado = totalRecFev-totalDespFev;
+  kpiRow.innerHTML = `
+    <div class="kpi lead">
+      <div class="label">Empresa mais eficiente (Fev)</div>
+      <div class="value">${leader.nome}</div>
+      <div class="foot">${leader.segmento} · margem líquida ${pct(leader.margem)}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Receita total do grupo (Fev/Real)</div>
+      <div class="value">${fmtBRLShort(totalRecFev)}</div>
+      <div class="foot">${fmtBRL(totalRecFev)}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Despesa total do grupo (Fev/Real)</div>
+      <div class="value">${fmtBRLShort(totalDespFev)}</div>
+      <div class="foot">${fmtBRL(totalDespFev)}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Resultado consolidado (Fev/Real)</div>
+      <div class="value ${totalResultado>=0?'pos':'neg'}">${fmtBRLShort(totalResultado)}</div>
+      <div class="foot">${totalResultado>=0?'Superávit':'Déficit'} agregado das 6 empresas</div>
+    </div>
+  `;
+}
+buildKPIs();
+
+// Populate empresa filter
+const fEmpresaSel = document.getElementById('fEmpresa');
+ORDER.forEach(l=>{
+  const opt = document.createElement('option');
+  opt.value=l; opt.textContent = DATA[l].nome+' — '+DATA[l].segmento;
+  fEmpresaSel.appendChild(opt);
+});
+fEmpresaSel.addEventListener('change', e=>{ state.empresa=e.target.value; renderCharts(); });
+
+document.getElementById('fMes').addEventListener('click', e=>{
+  if(e.target.tagName!=='BUTTON') return;
+  [...e.currentTarget.children].forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  state.mes = e.target.dataset.v;
+  renderCharts();
+});
+document.getElementById('fBase').addEventListener('click', e=>{
+  if(e.target.tagName!=='BUTTON') return;
+  [...e.currentTarget.children].forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  state.base = e.target.dataset.v;
+  renderCharts();
+});
+
+const palette = {
+  A:'#2FD4C4', B:'#5B8DEF', C:'#F0596A', D:'#F2C14E', E:'#B98CF2', F:'#7FDB6B'
+};
+
+let chartRD, chartResultado, chartEficiencia, chartDesvio;
+
+function activeLetters(){
+  return state.empresa==='ALL' ? ORDER : [state.empresa];
+}
+
+function renderCharts(){
+  const letters = activeLetters();
+  const labels = letters.map(l=>DATA[l].nome.replace('Empresa ',''));
+  const idx = idxFor(state.mes, state.base);
+
+  const recData = letters.map(l=>DATA[l].receita[idx]);
+  const despData = letters.map(l=>DATA[l].despesas[idx]);
+  const resultData = letters.map((l,i)=>recData[i]-despData[i]);
+
+  const commonOpts = {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:'#8FA3BC', font:{family:'Inter', size:11}}},
+      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+fmtBRL(ctx.raw)}} },
+    scales:{
+      x:{ ticks:{color:'#8FA3BC', font:{family:'IBM Plex Mono', size:11}}, grid:{color:'rgba(255,255,255,.04)'} },
+      y:{ ticks:{color:'#8FA3BC', font:{family:'IBM Plex Mono', size:10}, callback:v=>fmtBRLShort(v)}, grid:{color:'rgba(255,255,255,.06)'} }
+    }
+  };
+
+  if(chartRD) chartRD.destroy();
+  chartRD = new Chart(document.getElementById('chartRD'), {
+    type:'bar',
+    data:{ labels, datasets:[
+      {label:'Receita', data:recData, backgroundColor:'#2FD4C4', borderRadius:4, maxBarThickness:28, categoryPercentage:0.6, barPercentage:0.9},
+      {label:'Despesa', data:despData, backgroundColor:'#F0596A', borderRadius:4, maxBarThickness:28, categoryPercentage:0.6, barPercentage:0.9}
+    ]},
+    options: commonOpts
+  });
+
+  if(chartResultado) chartResultado.destroy();
+  chartResultado = new Chart(document.getElementById('chartResultado'), {
+    type:'bar',
+    data:{ labels, datasets:[{
+      label:'Resultado', data:resultData,
+      backgroundColor: resultData.map(v=>v>=0?'#3CCB7F':'#F0596A'),
+      borderRadius:4, maxBarThickness:26, categoryPercentage:0.6, barPercentage:0.9
+    }]},
+    options:{...commonOpts, plugins:{...commonOpts.plugins, legend:{display:false}}, indexAxis:'y'}
+  });
+
+  // Fixed Fev/Real views (all companies) for efficiency & desvio, independent of empresa filter for context, but highlight selection
+  const effLabels = ORDER.map(l=>DATA[l].nome.replace('Empresa ',''));
+  const effData = ROWS.map(r=>r.eficiencia);
+  const desvioData = ROWS.map(r=>r.desvioDesp);
+  const highlightColors = ORDER.map(l => (state.empresa==='ALL'||state.empresa===l) ? '#2FD4C4' : 'rgba(143,163,188,.25)');
+  const desvioColors = desvioData.map((v,i)=> {
+    const base = v<=10 ? '#3CCB7F' : (v<=25 ? '#F2B84B' : '#F0596A');
+    return (state.empresa==='ALL'||state.empresa===ORDER[i]) ? base : 'rgba(143,163,188,.2)';
+  });
+
+  if(chartEficiencia) chartEficiencia.destroy();
+  chartEficiencia = new Chart(document.getElementById('chartEficiencia'), {
+    type:'bar',
+    data:{ labels:effLabels, datasets:[{label:'Despesa/Receita (%)', data:effData, backgroundColor:highlightColors, borderRadius:4, maxBarThickness:32, categoryPercentage:0.6, barPercentage:0.9}]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>ctx.raw.toFixed(1)+'% da receita consumido em despesas'}}},
+      scales:{ x:{ticks:{color:'#8FA3BC',font:{family:'IBM Plex Mono',size:11}}, grid:{display:false}},
+               y:{ticks:{color:'#8FA3BC',font:{family:'IBM Plex Mono',size:10}, callback:v=>v+'%'}, grid:{color:'rgba(255,255,255,.06)'}} }
+    }
+  });
+
+  if(chartDesvio) chartDesvio.destroy();
+  chartDesvio = new Chart(document.getElementById('chartDesvio'), {
+    type:'bar',
+    data:{ labels:effLabels, datasets:[{label:'Desvio de despesa Fev (%)', data:desvioData, backgroundColor:desvioColors, borderRadius:4, maxBarThickness:32, categoryPercentage:0.6, barPercentage:0.9}]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>pct(ctx.raw)+' vs. planejado'}}},
+      scales:{ x:{ticks:{color:'#8FA3BC',font:{family:'IBM Plex Mono',size:11}}, grid:{display:false}},
+               y:{ticks:{color:'#8FA3BC',font:{family:'IBM Plex Mono',size:10}, callback:v=>v+'%'}, grid:{color:'rgba(255,255,255,.06)'}} }
+    }
+  });
+}
+
+// ---- Ranking table ----
+let sortKey='margem', sortDir=-1;
+function renderRank(){
+  const sorted = [...ROWS].sort((a,b)=>{
+    let av=a[sortKey], bv=b[sortKey];
+    if(typeof av==='string') return sortDir*av.localeCompare(bv);
+    return sortDir*(av-bv);
+  });
+  const body = document.getElementById('rankBody');
+  body.innerHTML = sorted.map((r,i)=>{
+    const medalClass = i===0?'m1':i===1?'m2':i===2?'m3':'mx';
+    return `<tr class="row-clickable" data-letter="${r.letter}">
+      <td><span class="medal ${medalClass}">${i+1}</span></td>
+      <td class="name">${r.nome}</td>
+      <td>${r.segmento}</td>
+      <td>${fmtBRL(r.receita)}</td>
+      <td>${fmtBRL(r.despesa)}</td>
+      <td class="${r.resultado>=0?'pos':'neg'}">${fmtBRL(r.resultado)}</td>
+      <td><span class="pill ${r.margem>=0?'pos-bg':'neg-bg'}">${pct(r.margem)}</span></td>
+      <td class="${r.desvioDesp<=10?'pos':(r.desvioDesp<=25?'':'neg')}">${pct(r.desvioDesp)}</td>
+    </tr>`;
+  }).join('');
+  [...body.querySelectorAll('tr')].forEach(tr=>{
+    tr.addEventListener('click', ()=>openDetail(tr.dataset.letter));
+  });
+}
+document.querySelectorAll('#rankTable th[data-k]').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const k = th.dataset.k;
+    if(k==='pos'){ return; }
+    if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir = (k==='desvioDesp')?1:-1; }
+    renderRank();
+  });
+});
+renderRank();
+
+// ---- Detail drilldown ----
+function openDetail(letter){
+  const d = DATA[letter];
+  const panel = document.getElementById('detailPanel');
+  document.getElementById('detailTitle').textContent = d.nome + ' — detalhamento de despesas';
+  document.getElementById('detailTag').textContent = d.segmento.toUpperCase()+' · CAPITAL SOCIAL '+fmtBRL(d.capitalSocial)+' · ATIVOS PLANEJADOS '+fmtBRL(d.ativosPlan)+' (REALIZADO '+fmtBRL(d.ativosReal)+')';
+  const body = document.getElementById('detailBody');
+  body.innerHTML = d.despesasDetalhe.map(row=>{
+    const [desc,janP,janR,fevP,fevR] = row;
+    const dev = fevP!==0 ? ((fevR-fevP)/fevP*100) : (fevR>0?100:0);
+    const flag = fevR>fevP ? '🟥' : (fevR<fevP ? '🟩' : '⬜');
+    return `<tr>
+      <td class="name" style="font-family:var(--sans); font-weight:500;">${desc}</td>
+      <td>${fmtBRL(janP)}</td>
+      <td>${fmtBRL(janR)}</td>
+      <td>${fmtBRL(fevP)}</td>
+      <td>${fmtBRL(fevR)}</td>
+      <td><span class="flag">${flag}</span> ${pct(dev)}</td>
+    </tr>`;
+  }).join('') + `<tr style="font-weight:700;">
+      <td class="name" style="font-family:var(--sans);">Total_Despesas</td>
+      <td>${fmtBRL(d.despesas[0])}</td><td>${fmtBRL(d.despesas[1])}</td>
+      <td>${fmtBRL(d.despesas[2])}</td><td>${fmtBRL(d.despesas[3])}</td>
+      <td>${pct((d.despesas[3]-d.despesas[2])/d.despesas[2]*100)}</td>
+    </tr>`;
+  panel.classList.add('show');
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+}
+document.getElementById('closeDetail').addEventListener('click', ()=>{
+  document.getElementById('detailPanel').classList.remove('show');
+});
+
+renderCharts();
+</script>
+</body>
+</html>
